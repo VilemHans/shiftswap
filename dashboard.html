@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Shift-Swap</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FullCalendar CSS & JS -->
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+
+    <!-- HORNÍ LIŠTA -->
+    <nav class="bg-blue-600 text-white px-6 py-4 flex justify-between items-center shadow-md mb-8">
+        <a href="{% url 'dashboard' %}" class="text-2xl font-bold tracking-wide">Smart Shift-Swap</a>
+        <div class="flex items-center gap-4">
+            <span>Uživatel: <strong class="font-semibold">{{ request.user.username }}</strong></span>
+            <a href="{% url 'logout' %}" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded text-sm font-medium transition">
+                Odhlásit
+            </a>
+        </div>
+    </nav>
+
+    <!-- HLAVNÍ OBSAH -->
+    <div class="max-w-5xl mx-auto px-4 pb-12">
+        <div class="space-y-6">
+
+            <!-- Moje nadcházející směny -->
+            <div class="bg-white shadow rounded-lg p-6">
+                <h2 class="text-xl font-bold mb-4 text-gray-800">Moje nadcházející směny</h2>
+                {% if shifts %}
+                    <ul class="divide-y divide-gray-200">
+                        {% for shift in shifts %}
+                            <li class="py-4 flex justify-between items-center">
+                                <div>
+                                    <p class="font-semibold text-gray-800">
+                                        {{ shift.start_time|date:"d.m.Y H:i" }} - {{ shift.end_time|date:"H:i" }}
+                                    </p>
+                                    <p class="text-sm text-gray-500">{{ shift.note|default:"Bez poznámky" }}</p>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    {% if shift.status == 'assigned' %}
+                                        <span class="bg-green-100 text-green-700 text-xs px-2.5 py-1 rounded-full font-medium border border-green-200">
+                                            Přiřazeno
+                                        </span>
+                                        <a href="{% url 'offer_shift' shift.id %}" 
+                                           onclick="return confirm('Opravdu chcete nabídnout tuto směnu k výměně?');"
+                                           class="bg-amber-500 hover:bg-amber-600 text-white text-sm px-3 py-1.5 rounded transition font-medium">
+                                            Nabídnout k výměně
+                                        </a>
+                                    {% elif shift.status == 'offered' %}
+                                        <span class="bg-amber-100 text-amber-700 text-xs px-2.5 py-1 rounded-full font-medium border border-amber-200">
+                                            Nabídnuto
+                                        </span>
+                                        <a href="{% url 'cancel_offer' shift.id %}" 
+                                           class="bg-gray-500 hover:bg-gray-600 text-white text-sm px-3 py-1.5 rounded transition font-medium">
+                                            Zrušit nabídku
+                                        </a>
+                                    {% endif %}
+                                </div>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="text-gray-500 italic">Nemáte žádné nadcházející směny.</p>
+                {% endif %}
+            </div>
+
+            <!-- Burza směn (Volné směny od kolegů) -->
+            <div class="bg-white shadow rounded-lg p-6">
+                <h2 class="text-xl font-bold mb-4 text-gray-800">Burza směn (Volné směny od kolegů)</h2>
+                {% if market_shifts %}
+                    <ul class="divide-y divide-gray-200">
+                        {% for shift in market_shifts %}
+                            <li class="py-4 flex justify-between items-center">
+                                <div>
+                                    <p class="font-semibold text-gray-800">
+                                        {{ shift.user.username }} | {{ shift.start_time|date:"d.m.Y H:i" }} - {{ shift.end_time|date:"H:i" }}
+                                    </p>
+                                    <p class="text-sm text-gray-500">{{ shift.note|default:"Bez poznámky" }}</p>
+                                </div>
+                                <a href="{% url 'request_shift' shift.id %}"
+                                   onclick="return confirm('Opravdu chcete požádat o tuto směnu?');"
+                                   class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-3 py-1.5 rounded transition">
+                                    Mám zájem o směnu
+                                </a>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="text-gray-500 italic">V burze aktuálně nejsou žádné nabídky.</p>
+                {% endif %}
+            </div>
+
+            <!-- Kalendář směn -->
+            <div class="bg-white shadow rounded-lg p-6">
+                <h2 class="text-xl font-bold mb-4 text-gray-800">Kalendář směn</h2>
+                <div id="calendar"></div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Bezpečné předání dat z Djanga do JS -->
+    {{ calendar_events|json_script:"calendar-data" }}
+
+    <!-- Script pro načtení FullCalendar -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var calendarEl = document.getElementById('calendar');
+            if (calendarEl) {
+                var rawDataElement = document.getElementById('calendar-data');
+                var calendarEvents = rawDataElement ? JSON.parse(rawDataElement.textContent) : [];
+
+                var calendar = new FullCalendar.Calendar(calendarEl, {
+                    initialView: 'dayGridMonth',
+                    locale: 'cs',
+                    firstDay: 1,
+                    headerToolbar: {
+                        left: 'prev,next today',
+                        center: 'title',
+                        right: 'dayGridMonth,timeGridWeek'
+                    },
+                    buttonText: {
+                        today: 'Dnes',
+                        month: 'Měsíc',
+                        week: 'Týden'
+                    },
+                    events: calendarEvents
+                });
+                calendar.render();
+            }
+        });
+    </script>
+
+</body>
+</html>

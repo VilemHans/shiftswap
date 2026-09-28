@@ -1,22 +1,45 @@
 from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth import login, logout, authenticate
-from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.decorators import login_required
-from .models import Shift, ShiftRequest, Company, Profile
+from django.contrib.auth import login, logout
+from django.contrib.auth.forms import AuthenticationForm
+from .models import Shift, ShiftRequest
+
 
 @login_required(login_url='login')
 def dashboard(request):
     user_shifts = Shift.objects.filter(user=request.user).order_by('start_time')
     market_shifts = Shift.objects.filter(status='offered').exclude(user=request.user)
-    
-    # Žádosti o výměnu směn přihlášeného uživatele
     pending_requests = ShiftRequest.objects.filter(offered_by=request.user, status='pending')
-    
+
+    # Príprava událostí pre kalendár
+    events = []
+
+    # 1. Moje zmeny (modrá farba)
+    for shift in user_shifts:
+        events.append({
+            'title': f"Moje směna ({shift.note or 'Bez poznámky'})",
+            'start': shift.start_time.isoformat(),
+            'end': shift.end_time.isoformat() if shift.end_time else None,
+            'color': '#2563eb',  # Modrá
+        })
+
+    # 2. Voľné zmeny od kolegov z burzy (oranžová farba)
+    for shift in market_shifts:
+        events.append({
+            'title': f"Volná: {shift.user.username if shift.user else 'Kolega'}",
+            'start': shift.start_time.isoformat(),
+            'end': shift.end_time.isoformat() if shift.end_time else None,
+            'color': '#f59e0b',  # Oranžová
+            'textColor': '#ffffff'
+        })
+
     return render(request, 'core/dashboard.html', {
         'shifts': user_shifts,
         'market_shifts': market_shifts,
-        'pending_requests': pending_requests
+        'pending_requests': pending_requests,
+        'calendar_events': events  # Posielame priamo zoznam Python slovníkov
     })
+
 
 @login_required(login_url='login')
 def offer_shift(request, shift_id):
@@ -25,14 +48,15 @@ def offer_shift(request, shift_id):
     shift.save()
     return redirect('dashboard')
 
+
 @login_required(login_url='login')
 def cancel_offer(request, shift_id):
     shift = get_object_or_404(Shift, id=shift_id, user=request.user, status='offered')
     shift.status = 'assigned'
     shift.save()
-    # Smažeme případné čerstvé žádosti o tuto směnu
     ShiftRequest.objects.filter(shift=shift, status='pending').delete()
     return redirect('dashboard')
+
 
 @login_required(login_url='login')
 def request_shift(request, shift_id):
@@ -46,10 +70,11 @@ def request_shift(request, shift_id):
         )
     return redirect('dashboard')
 
+
 @login_required(login_url='login')
 def approve_request(request, request_id):
     shift_request = get_object_or_404(ShiftRequest, id=request_id, offered_by=request.user)
-    
+
     shift = shift_request.shift
     shift.user = shift_request.accepted_by
     shift.status = 'assigned'
@@ -59,6 +84,7 @@ def approve_request(request, request_id):
     shift_request.save()
 
     return redirect('dashboard')
+
 
 def login_view(request):
     if request.method == 'POST':
@@ -70,6 +96,7 @@ def login_view(request):
     else:
         form = AuthenticationForm()
     return render(request, 'core/login.html', {'form': form})
+
 
 def logout_view(request):
     logout(request)
