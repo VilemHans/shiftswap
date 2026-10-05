@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="cs" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Shift-Swap | Moderní správa směn</title>
+    <!-- Google Font: Plus Jakarta Sans -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FullCalendar CSS & JS -->
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Plus Jakarta Sans"', 'system-ui', '-apple-system', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'glow': '0 0 20px -3px rgba(79, 70, 229, 0.25)',
+                        'drawer': '0 25px 50px -12px rgba(15, 23, 42, 0.25)',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+        }
+
+        /* Moderní FullCalendar stylizace */
+        .fc {
+            --fc-border-color: #f1f5f9;
+            --fc-button-bg-color: #ffffff;
+            --fc-button-border-color: #e2e8f0;
+            --fc-button-text-color: #334155;
+            --fc-button-hover-bg-color: #f8fafc;
+            --fc-button-hover-border-color: #cbd5e1;
+            --fc-button-active-bg-color: #4f46e5;
+            --fc-button-active-border-color: #4f46e5;
+            --fc-button-active-text-color: #ffffff;
+            --fc-today-bg-color: #f8faff;
+            font-family: inherit;
+        }
+        .fc .fc-toolbar {
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            margin-bottom: 1.25rem !important;
+        }
+        .fc .fc-toolbar-title {
+            font-size: 1.25rem !important;
+            font-weight: 700 !important;
+            color: #0f172a !important;
+        }
+        .fc .fc-button {
+            border-radius: 0.75rem !important;
+            padding: 0.45rem 0.9rem !important;
+            font-weight: 600 !important;
+            font-size: 0.875rem !important;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+            transition: all 0.15s ease;
+        }
+        .fc .fc-button-primary:not(:disabled).fc-button-active {
+            background-color: #4f46e5 !important;
+            border-color: #4f46e5 !important;
+            color: #ffffff !important;
+            box-shadow: 0 2px 4px rgba(79, 70, 229, 0.25);
+        }
+        .fc .fc-event {
+            border-radius: 8px;
+            padding: 3px 6px;
+            font-weight: 600;
+            font-size: 0.75rem;
+            border: none;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            cursor: pointer;
+            transition: transform 0.1s ease;
+        }
+        .fc .fc-event:hover {
+            transform: translateY(-1px);
+        }
+        .fc-theme-standard td, .fc-theme-standard th {
+            border-color: #f1f5f9;
+        }
+        .fc .fc-col-header-cell-cushion {
+            font-weight: 700;
+            color: #64748b;
+            padding: 10px 0;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+        }
+        .fc .fc-daygrid-day-number {
+            font-weight: 600;
+            color: #475569;
+            padding: 6px 8px;
+            font-size: 0.85rem;
+        }
+
+        /* Moderní styl položek v boční liště */
+        .drawer-item {
+            position: relative;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .drawer-item:hover {
+            background-color: #f8fafc;
+            border-color: #e2e8f0;
+            transform: translateX(2px);
+        }
+        .drawer-item.active {
+            background: linear-gradient(90deg, #eef2ff 0%, #ffffff 100%);
+            border-color: #c7d2fe;
+            box-shadow: 0 1px 3px rgba(79, 70, 229, 0.06);
+        }
+        .drawer-item.active::before {
+            content: '';
+            position: absolute;
+            left: -1px;
+            top: 20%;
+            bottom: 20%;
+            width: 3.5px;
+            border-radius: 0 4px 4px 0;
+            background-color: #4f46e5;
+        }
+        .drawer-item.active .drawer-item-title {
+            color: #3730a3;
+            font-weight: 700;
+        }
+        .drawer-item.active .drawer-icon-box {
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px -2px rgba(79, 70, 229, 0.3);
+        }
+
+        /* Vlastní posuvník pro lištu */
+        #drawerSidebar::-webkit-scrollbar {
+            width: 5px;
+        }
+        #drawerSidebar::-webkit-scrollbar-thumb {
+            background-color: #e2e8f0;
+            border-radius: 4px;
+        }
+
+        .view-section {
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col antialiased selection:bg-indigo-500 selection:text-white">
+
+    <!-- HORNÍ LIŠTA (Moderní záhlaví bez textových záložek) -->
+    <header class="bg-white/90 backdrop-blur-md border-b border-slate-200/80 sticky top-0 z-40 transition-shadow">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+            
+            <!-- VLEVO: 3 čáry pod sebou (Hamburger menu) a Logo aplikace -->
+            <div class="flex items-center gap-3 sm:gap-4">
+                <!-- Tlačítko se 3 čarami pod sebou -->
+                <button id="drawerToggleBtn" type="button" aria-label="Otevřít navigaci" aria-expanded="false"
+                        class="group flex items-center gap-2.5 px-3 py-2 rounded-xl bg-slate-100/90 hover:bg-indigo-50 active:scale-95 text-slate-700 hover:text-indigo-600 border border-slate-200/80 hover:border-indigo-200 transition-all shadow-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20">
+                    <div class="flex flex-col gap-1 w-4.5 justify-center items-center">
+                        <span class="w-4.5 h-0.5 bg-slate-600 group-hover:bg-indigo-600 rounded-full transition-all duration-200"></span>
+                        <span class="w-3.5 h-0.5 bg-slate-600 group-hover:bg-indigo-600 group-hover:w-4.5 rounded-full transition-all duration-200"></span>
+                        <span class="w-4 h-0.5 bg-slate-600 group-hover:bg-indigo-600 group-hover:w-4.5 rounded-full transition-all duration-200"></span>
+                    </div>
+                    <span class="text-xs font-bold tracking-wide">Menu</span>
+                </button>
+
+                <!-- Separátor -->
+                <div class="h-6 w-[1px] bg-slate-200 hidden sm:block"></div>
+
+                <!-- Logo a název aplikace -->
+                <a href="{% url 'dashboard' %}" class="flex items-center gap-2.5 group">
+                    <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-violet-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/25 group-hover:scale-105 transition-transform">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="font-extrabold text-base sm:text-lg text-slate-900 tracking-tight leading-tight">
+                            Smart Shift-Swap
+                        </div>
+                    </div>
+                </a>
+
+                <!-- Indikátor aktuálního pohledu -->
+                <div id="currentViewBadge" class="hidden lg:flex items-center gap-2 ml-2 px-3 py-1 rounded-full bg-slate-100 border border-slate-200/70 text-xs font-semibold text-slate-600">
+                    <span class="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
+                    <span id="currentViewBadgeText">Kompletní přehled</span>
+                </div>
+            </div>
+
+            <!-- VPRAVO: Profil uživatele a Odhlášení -->
+            <div class="flex items-center gap-3">
+                <div class="flex items-center gap-2.5 bg-slate-50 border border-slate-200/70 pl-2 pr-3 py-1 rounded-xl shadow-2xs">
+                    <div class="w-7 h-7 rounded-lg bg-gradient-to-tr from-indigo-600 to-indigo-700 text-white flex items-center justify-center text-xs font-bold uppercase shadow-2xs">
+                        {{ request.user.username|slice:":2" }}
+                    </div>
+                    <div class="flex flex-col text-left">
+                        <span class="text-xs font-bold text-slate-800 leading-none">{{ request.user.username }}</span>
+                        <span class="text-[10px] font-medium text-emerald-600 flex items-center gap-1 mt-0.5">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Aktivní
+                        </span>
+                    </div>
+                </div>
+
+                <a href="{% url 'logout' %}" 
+                   class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-200/70 hover:border-rose-200 text-xs font-semibold transition active:scale-95 shadow-2xs">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                    </svg>
+                    <span>Odhlásit</span>
+                </a>
+            </div>
+
+        </div>
+    </header>
+
+    <!-- POSTRANNÍ VYSOUVACÍ NAVIGAČNÍ LIŠTA (Ultra-moderní Drawer) -->
+    <div id="drawerOverlay" class="fixed inset-0 bg-slate-950/40 backdrop-blur-xs z-50 opacity-0 pointer-events-none transition-opacity duration-300 ease-out"></div>
+
+    <aside id="drawerSidebar" aria-label="Navigační lišta"
+           class="fixed top-0 left-0 h-full w-[340px] max-w-[88vw] bg-white/95 backdrop-blur-2xl border-r border-slate-200/90 shadow-drawer z-50 transform -translate-x-full transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] flex flex-col">
+        
+        <!-- 1. Hlavička boční lišty -->
+        <div class="p-5 border-b border-slate-100/90 flex justify-between items-center bg-gradient-to-b from-slate-50/70 to-transparent">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-violet-600 text-white flex items-center justify-center shadow-md shadow-indigo-500/25">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h3 class="font-extrabold text-slate-900 text-base tracking-tight leading-tight">Smart Shift-Swap</h3>
+                    <p class="text-[11px] font-medium text-slate-400">Navigace & správa směn</p>
+                </div>
+            </div>
+            
+            <button id="drawerCloseBtn" type="button" aria-label="Zavřít menu"
+                    class="group flex items-center gap-1.5 p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 border border-transparent hover:border-slate-200 transition-all active:scale-95">
+                <span class="text-[10px] font-bold text-slate-400 group-hover:text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">ESC</span>
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+
+        <!-- 2. Rychlý přehled stavu (Mini Stats Widget) -->
+        <div class="px-5 pt-4 pb-2">
+            <div class="grid grid-cols-2 gap-2.5 p-2 rounded-2xl bg-slate-50/80 border border-slate-100">
+                <div class="p-2.5 rounded-xl bg-white border border-slate-200/60 shadow-2xs">
+                    <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Moje směny</div>
+                    <div class="text-lg font-extrabold text-slate-900 mt-0.5 flex items-center gap-1.5">
+                        <span>{{ shifts|length }}</span>
+                        <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                    </div>
+                </div>
+                <div class="p-2.5 rounded-xl bg-white border border-slate-200/60 shadow-2xs">
+                    <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Burza směn</div>
+                    <div class="text-lg font-extrabold text-amber-600 mt-0.5 flex items-center gap-1.5">
+                        <span>{{ market_shifts|length }}</span>
+                        <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. Navigační položky s moderním designem -->
+        <div class="p-4 flex-1 overflow-y-auto space-y-2">
+            <div class="px-3 mb-2">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sekce aplikace</span>
+            </div>
+
+            <!-- Moje směny -->
+            <button type="button" onclick="switchView('shifts'); closeDrawer();" data-drawer-view="shifts"
+                    class="drawer-item group w-full flex items-center justify-between p-3 rounded-2xl border border-transparent text-left">
+                <div class="flex items-center gap-3.5">
+                    <div class="drawer-icon-box w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-xs transition-transform">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="drawer-item-title font-bold text-sm text-slate-800 transition">Moje směny</div>
+                        <div class="text-[11px] text-slate-400 font-normal">Vaše přiřazené směny</div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    {% if shifts %}
+                        <span class="bg-blue-100 text-blue-800 text-[11px] font-bold px-2 py-0.5 rounded-full">
+                            {{ shifts|length }}
+                        </span>
+                    {% endif %}
+                    <svg class="w-4 h-4 text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                </div>
+            </button>
+
+            <!-- Kalendář -->
+            <button type="button" onclick="switchView('calendar'); closeDrawer();" data-drawer-view="calendar"
+                    class="drawer-item group w-full flex items-center justify-between p-3 rounded-2xl border border-transparent text-left">
+                <div class="flex items-center gap-3.5">
+                    <div class="drawer-icon-box w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-xs transition-transform">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="drawer-item-title font-bold text-sm text-slate-800 transition">Kalendář</div>
+                        <div class="text-[11px] text-slate-400 font-normal">Měsíční a týdenní rozpis</div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <svg class="w-4 h-4 text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                </div>
+            </button>
+
+            <!-- Směny k výměně -->
+            <button type="button" onclick="switchView('market'); closeDrawer();" data-drawer-view="market"
+                    class="drawer-item group w-full flex items-center justify-between p-3 rounded-2xl border border-transparent text-left">
+                <div class="flex items-center gap-3.5">
+                    <div class="drawer-icon-box w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white flex items-center justify-center font-bold text-sm shadow-xs transition-transform">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="drawer-item-title font-bold text-sm text-slate-800 transition">Směny k výměně</div>
+                        <div class="text-[11px] text-slate-400 font-normal">Burza volných směn kolegů</div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    {% if market_shifts %}
+                        <span class="inline-flex items-center gap-1 bg-amber-50 border border-amber-200/80 text-amber-800 text-[11px] font-bold px-2 py-0.5 rounded-full">
+                            <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                            {{ market_shifts|length }}
+                        </span>
+                    {% endif %}
+                    <svg class="w-4 h-4 text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                </div>
+            </button>
+
+            <!-- Oddělovač -->
+            <div class="pt-3 border-t border-slate-100/90 my-2">
+                <!-- Kompletní přehled (Vše) -->
+                <button type="button" onclick="switchView('all'); closeDrawer();" data-drawer-view="all"
+                        class="drawer-item group w-full flex items-center justify-between p-3 rounded-2xl border border-transparent text-left">
+                    <div class="flex items-center gap-3.5">
+                        <div class="drawer-icon-box w-10 h-10 rounded-xl bg-gradient-to-tr from-slate-700 to-slate-900 text-white flex items-center justify-center font-bold text-sm shadow-xs transition-transform">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <div class="drawer-item-title font-bold text-sm text-slate-800 transition">Vše (Přehled)</div>
+                            <div class="text-[11px] text-slate-400 font-normal">Zobrazit všechny sekce</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <svg class="w-4 h-4 text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                        </svg>
+                    </div>
+                </button>
+            </div>
+        </div>
+
+        <!-- 4. Spodní část navigace s uživatelským profilem -->
+        <div class="p-4 bg-slate-50/80 border-t border-slate-100/90">
+            <div class="p-3 bg-white rounded-2xl border border-slate-200/70 shadow-2xs flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="relative">
+                        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-700 text-white flex items-center justify-center font-bold text-sm shadow-xs">
+                            {{ request.user.username|slice:":2" }}
+                        </div>
+                        <span class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white"></span>
+                    </div>
+                    <div>
+                        <div class="font-bold text-sm text-slate-900 leading-tight">{{ request.user.username }}</div>
+                        <div class="text-[11px] font-medium text-emerald-600">Přihlášený uživatel</div>
+                    </div>
+                </div>
+                <a href="{% url 'logout' %}" title="Odhlásit se z aplikace"
+                   class="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-100 transition active:scale-95">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                    </svg>
+                </a>
+            </div>
+        </div>
+    </aside>
+
+    <!-- HLAVNÍ OBSAH STRÁNKY -->
+    <main class="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+        <!-- Horní panel pohledu s rychlým tlačítkem zpět na Vše -->
+        <div id="viewBanner" class="hidden mb-6 p-4 rounded-2xl bg-indigo-50/70 border border-indigo-100 flex items-center justify-between gap-4">
+            <div class="flex items-center gap-2.5">
+                <span id="viewBannerIcon" class="text-xl">📋</span>
+                <div>
+                    <h2 id="viewBannerTitle" class="font-bold text-indigo-950 text-sm sm:text-base leading-tight">Moje směny</h2>
+                    <p class="text-xs text-indigo-700">Filtrovaný pohled na vybranou sekci</p>
+                </div>
+            </div>
+            <button type="button" onclick="switchView('all')"
+                    class="px-3 py-1.5 rounded-xl bg-white hover:bg-indigo-50 border border-indigo-200 text-indigo-700 font-semibold text-xs transition shadow-2xs flex items-center gap-1.5 active:scale-95">
+                <span>🗂️ Zobrazit vše</span>
+            </button>
+        </div>
+
+        <!-- Upozornění na nevyřízené žádosti o směnu -->
+        {% if pending_requests %}
+        <div class="mb-8 p-5 rounded-2xl bg-amber-50/90 border border-amber-200/80 shadow-2xs">
+            <div class="flex items-start gap-3.5">
+                <div class="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center font-bold text-lg shrink-0 shadow-sm shadow-amber-500/20">
+                    ⏳
+                </div>
+                <div class="flex-1">
+                    <div class="flex items-center gap-2">
+                        <h3 class="font-bold text-amber-950 text-base">Čekající žádosti o předání směny</h3>
+                        <span class="bg-amber-200/80 text-amber-900 text-xs font-bold px-2 py-0.5 rounded-full">
+                            {{ pending_requests|length }}
+                        </span>
+                    </div>
+                    <p class="text-xs text-amber-800 mt-0.5">Kolega má zájem o vaši nabízenou směnu. Schválením dojde k jejímu okamžitému předání:</p>
+                    
+                    <ul class="mt-3.5 space-y-2">
+                        {% for req in pending_requests %}
+                            <li class="bg-white/80 border border-amber-200/60 p-3 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                                <div class="text-sm">
+                                    <span class="font-bold text-slate-900">{{ req.accepted_by.username }}</span>
+                                    <span class="text-slate-600">žádá o směnu:</span>
+                                    <span class="font-semibold text-slate-800 bg-amber-100/70 px-2 py-0.5 rounded-md text-xs">
+                                        {{ req.shift.start_time|date:"d.m.Y H:i" }} – {{ req.shift.end_time|date:"H:i" }}
+                                    </span>
+                                    {% if req.shift.note %}
+                                        <span class="text-xs text-slate-500">({{ req.shift.note }})</span>
+                                    {% endif %}
+                                </div>
+                                <a href="{% url 'approve_request' req.id %}"
+                                   onclick="return confirm('Opravdu chcete schválit předání této směny uživateli {{ req.accepted_by.username }}?');"
+                                   class="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-semibold text-xs transition shadow-2xs flex items-center gap-1">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                    <span>Schválit předání</span>
+                                </a>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- SEKCE OBSAHU -->
+        <div class="space-y-8">
+
+            <!-- 1. SEKCE: MOJE NADCHÁZEJÍCÍ SMĚNY -->
+            <section id="section-shifts" class="view-section bg-white rounded-2xl border border-slate-200/80 shadow-2xs hover:shadow-xs transition-shadow p-6 sm:p-7">
+                <div class="flex justify-between items-center pb-5 mb-5 border-b border-slate-100">
+                    <div class="flex items-center gap-3.5">
+                        <div class="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl shadow-2xs">
+                            📋
+                        </div>
+                        <div>
+                            <h2 class="text-lg sm:text-xl font-bold text-slate-900">Moje nadcházející směny</h2>
+                            <p class="text-xs text-slate-500">Rozpis směn, na které jste aktuálně přiřazeni</p>
+                        </div>
+                    </div>
+                    {% if shifts %}
+                        <span class="bg-blue-50 text-blue-700 border border-blue-200/70 text-xs font-bold px-3 py-1 rounded-full">
+                            {{ shifts|length }} směn
+                        </span>
+                    {% endif %}
+                </div>
+
+                {% if shifts %}
+                    <div class="divide-y divide-slate-100">
+                        {% for shift in shifts %}
+                            <div class="py-4 first:pt-0 last:pb-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                                <div class="flex items-start gap-3.5">
+                                    <div class="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200/70 text-slate-600 flex items-center justify-center shrink-0 mt-0.5">
+                                        <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div class="font-bold text-slate-900 text-sm sm:text-base">
+                                            {{ shift.start_time|date:"d.m.Y H:i" }} – {{ shift.end_time|date:"H:i" }}
+                                        </div>
+                                        <p class="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5">
+                                            <span>Poznámka:</span>
+                                            <span class="text-slate-700 font-medium">{{ shift.note|default:"Bez poznámky" }}</span>
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div class="flex items-center gap-3 w-full sm:w-auto justify-end">
+                                    {% if shift.status == 'assigned' %}
+                                        <span class="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200/80 text-xs px-3 py-1 rounded-full font-semibold">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Přiřazeno
+                                        </span>
+                                        <a href="{% url 'offer_shift' shift.id %}" 
+                                           onclick="return confirm('Opravdu chcete nabídnout tuto směnu k výměně?');"
+                                           class="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-semibold text-xs transition shadow-2xs">
+                                            Nabídnout k výměně
+                                        </a>
+                                    {% elif shift.status == 'offered' %}
+                                        <span class="inline-flex items-center gap-1.5 bg-amber-50 text-amber-700 border border-amber-200/80 text-xs px-3 py-1 rounded-full font-semibold">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> V nabídce
+                                        </span>
+                                        <a href="{% url 'cancel_offer' shift.id %}" 
+                                           class="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 active:scale-95 font-semibold text-xs transition border border-slate-200">
+                                            Zrušit nabídku
+                                        </a>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-12">
+                        <div class="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto text-2xl mb-3">
+                            🏖️
+                        </div>
+                        <p class="text-sm font-semibold text-slate-700">Žádné naplánované směny</p>
+                        <p class="text-xs text-slate-400 mt-1">Aktuálně nemáte přiřazenou žádnou nadcházející směnu.</p>
+                    </div>
+                {% endif %}
+            </section>
+
+            <!-- 2. SEKCE: SMĚNY K VÝMĚNĚ (BURZA) -->
+            <section id="section-market" class="view-section bg-white rounded-2xl border border-slate-200/80 shadow-2xs hover:shadow-xs transition-shadow p-6 sm:p-7">
+                <div class="flex justify-between items-center pb-5 mb-5 border-b border-slate-100">
+                    <div class="flex items-center gap-3.5">
+                        <div class="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-xl shadow-2xs">
+                            🔄
+                        </div>
+                        <div>
+                            <h2 class="text-lg sm:text-xl font-bold text-slate-900">Směny k výměně (Burza)</h2>
+                            <p class="text-xs text-slate-500">Volné směny kolegů, které si můžete převzít</p>
+                        </div>
+                    </div>
+                    {% if market_shifts %}
+                        <span class="bg-amber-50 text-amber-800 border border-amber-200/80 text-xs font-bold px-3 py-1 rounded-full">
+                            {{ market_shifts|length }} k dispozici
+                        </span>
+                    {% endif %}
+                </div>
+
+                {% if market_shifts %}
+                    <div class="divide-y divide-slate-100">
+                        {% for shift in market_shifts %}
+                            {% if shift.is_requested %}
+                                <!-- Směna, o kterou již přihlášený uživatel zažádal -->
+                                <div class="py-4 first:pt-0 last:pb-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-amber-50/50 -mx-6 px-6 sm:-mx-7 sm:px-7 border-l-4 border-amber-500 rounded-r-xl transition">
+                                    <div class="flex items-start gap-3.5">
+                                        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white flex items-center justify-center font-bold text-xs uppercase shrink-0 mt-0.5 shadow-2xs">
+                                            {{ shift.user.username|slice:":2" }}
+                                        </div>
+                                        <div>
+                                            <div class="flex items-center gap-2 flex-wrap">
+                                                <span class="font-bold text-slate-900 text-sm sm:text-base">
+                                                    {{ shift.start_time|date:"d.m.Y H:i" }} – {{ shift.end_time|date:"H:i" }}
+                                                </span>
+                                                <span class="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">
+                                                    {{ shift.user.username }}
+                                                </span>
+                                                <span class="inline-flex items-center gap-1.5 bg-amber-100 text-amber-900 text-[11px] font-bold px-2.5 py-0.5 rounded-full border border-amber-300">
+                                                    <span class="w-1.5 h-1.5 rounded-full bg-amber-600 animate-pulse"></span>
+                                                    Zažádáno o směnu
+                                                </span>
+                                            </div>
+                                            <p class="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
+                                                <span>Poznámka:</span>
+                                                <span class="text-slate-700 font-medium">{{ shift.note|default:"Bez poznámky" }}</span>
+                                            </p>
+                                            <p class="text-[11px] text-amber-700 font-medium mt-0.5 flex items-center gap-1">
+                                                <svg class="w-3.5 h-3.5 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                                </svg>
+                                                <span>Čeká na schválení uživatelem {{ shift.user.username }}</span>
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+                                        <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-100/90 text-amber-900 border border-amber-200 text-xs font-bold shadow-2xs">
+                                            <svg class="w-3.5 h-3.5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path>
+                                            </svg>
+                                            <span>Žádost odeslána</span>
+                                        </span>
+                                        <a href="{% url 'cancel_request' shift.id %}"
+                                           onclick="return confirm('Opravdu chcete zrušit svou žádost o tuto směnu?');"
+                                           class="px-3 py-1.5 rounded-xl bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-200 hover:border-rose-200 text-xs font-semibold transition active:scale-95 shadow-2xs">
+                                            Zrušit žádost
+                                        </a>
+                                    </div>
+                                </div>
+                            {% else %}
+                                <!-- Běžná volná směna k převzetí -->
+                                <div class="py-4 first:pt-0 last:pb-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                                    <div class="flex items-start gap-3.5">
+                                        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white flex items-center justify-center font-bold text-xs uppercase shrink-0 mt-0.5 shadow-2xs">
+                                            {{ shift.user.username|slice:":2" }}
+                                        </div>
+                                        <div>
+                                            <div class="flex items-center gap-2">
+                                                <span class="font-bold text-slate-900 text-sm sm:text-base">
+                                                    {{ shift.start_time|date:"d.m.Y H:i" }} – {{ shift.end_time|date:"H:i" }}
+                                                </span>
+                                                <span class="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">
+                                                    {{ shift.user.username }}
+                                                </span>
+                                            </div>
+                                            <p class="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
+                                                <span>Poznámka:</span>
+                                                <span class="text-slate-700 font-medium">{{ shift.note|default:"Bez poznámky" }}</span>
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <a href="{% url 'request_shift' shift.id %}"
+                                       onclick="return confirm('Opravdu chcete požádat o převzetí této směny?');"
+                                       class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-semibold text-xs transition shadow-sm shadow-indigo-600/20 flex items-center gap-1.5">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                                        </svg>
+                                        <span>Mám zájem o směnu</span>
+                                    </a>
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-12">
+                        <div class="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto text-2xl mb-3">
+                            ✨
+                        </div>
+                        <p class="text-sm font-semibold text-slate-700">Burza je prázdná</p>
+                        <p class="text-xs text-slate-400 mt-1">V burze aktuálně nejsou žádné volné směny na výměnu.</p>
+                    </div>
+                {% endif %}
+            </section>
+
+            <!-- 3. SEKCE: KALENDÁŘ SMĚN -->
+            <section id="section-calendar" class="view-section bg-white rounded-2xl border border-slate-200/80 shadow-2xs hover:shadow-xs transition-shadow p-6 sm:p-7">
+                <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-4 pb-5 mb-5 border-b border-slate-100">
+                    <div class="flex items-center gap-3.5">
+                        <div class="w-11 h-11 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center text-xl shadow-2xs">
+                            📅
+                        </div>
+                        <div>
+                            <h2 class="text-lg sm:text-xl font-bold text-slate-900">Kalendář směn</h2>
+                            <p class="text-xs text-slate-500">Interaktivní rozvrh směn v měsíčním a týdenním zobrazení</p>
+                        </div>
+                    </div>
+
+                    <!-- Legenda barev -->
+                    <div class="flex items-center gap-3 text-xs font-semibold">
+                        <div class="flex items-center gap-1.5 bg-blue-50 text-blue-700 px-3 py-1.5 rounded-xl border border-blue-100">
+                            <span class="w-2.5 h-2.5 rounded-full bg-blue-600"></span>
+                            <span>Moje směny</span>
+                        </div>
+                        <div class="flex items-center gap-1.5 bg-amber-50 text-amber-700 px-3 py-1.5 rounded-xl border border-amber-100">
+                            <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                            <span>Směny k výměně</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="calendar" class="min-h-[550px]"></div>
+            </section>
+
+        </div>
+    </main>
+
+    <!-- Data pro FullCalendar -->
+    {{ calendar_events|json_script:"calendar-data" }}
+
+    <!-- Script pro navigaci přes 3 čáry a kalendář -->
+    <script>
+        let calendarInstance = null;
+        let isDrawerOpen = false;
+
+        // Odkazy na elementy boční lišty (Drawer)
+        const drawerOverlay = document.getElementById('drawerOverlay');
+        const drawerSidebar = document.getElementById('drawerSidebar');
+        const drawerToggleBtn = document.getElementById('drawerToggleBtn');
+        const drawerCloseBtn = document.getElementById('drawerCloseBtn');
+
+        function openDrawer() {
+            drawerOverlay.classList.remove('opacity-0', 'pointer-events-none');
+            drawerOverlay.classList.add('opacity-100');
+            drawerSidebar.classList.remove('-translate-x-full');
+            drawerToggleBtn.setAttribute('aria-expanded', 'true');
+            document.body.classList.add('overflow-hidden');
+            isDrawerOpen = true;
+        }
+
+        function closeDrawer() {
+            drawerOverlay.classList.remove('opacity-100');
+            drawerOverlay.classList.add('opacity-0', 'pointer-events-none');
+            drawerSidebar.classList.add('-translate-x-full');
+            drawerToggleBtn.setAttribute('aria-expanded', 'false');
+            document.body.classList.remove('overflow-hidden');
+            isDrawerOpen = false;
+        }
+
+        drawerToggleBtn.addEventListener('click', openDrawer);
+        drawerCloseBtn.addEventListener('click', closeDrawer);
+        drawerOverlay.addEventListener('click', closeDrawer);
+
+        // Klávesové zkratky (ESC pro zavření, M pro otevření)
+        document.addEventListener('keydown', function(event) {
+            if (['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName)) return;
+
+            if (event.key === 'Escape' && isDrawerOpen) {
+                closeDrawer();
+            } else if ((event.key === 'm' || event.key === 'M') && !isDrawerOpen) {
+                openDrawer();
+            }
+        });
+
+        // Přepínání pohledů výhradně přes navigační lištu ze 3 čar
+        function switchView(viewName) {
+            const sections = {
+                'shifts': document.getElementById('section-shifts'),
+                'market': document.getElementById('section-market'),
+                'calendar': document.getElementById('section-calendar')
+            };
+
+            const viewTitles = {
+                'shifts': { title: 'Moje nadcházející směny', icon: '📋' },
+                'market': { title: 'Směny k výměně (Burza)', icon: '🔄' },
+                'calendar': { title: 'Kalendář směn', icon: '📅' },
+                'all': { title: 'Kompletní přehled', icon: '🗂️' }
+            };
+
+            // Zobrazení/skrytí sekcí
+            if (viewName === 'all') {
+                Object.values(sections).forEach(sec => sec.classList.remove('hidden'));
+                document.getElementById('viewBanner').classList.add('hidden');
+                document.getElementById('currentViewBadgeText').textContent = 'Kompletní přehled';
+            } else {
+                Object.entries(sections).forEach(([key, sec]) => {
+                    if (key === viewName) {
+                        sec.classList.remove('hidden');
+                    } else {
+                        sec.classList.add('hidden');
+                    }
+                });
+
+                // Aktualizace horního informačního banneru
+                const banner = document.getElementById('viewBanner');
+                banner.classList.remove('hidden');
+                document.getElementById('viewBannerTitle').textContent = viewTitles[viewName].title;
+                document.getElementById('viewBannerIcon').textContent = viewTitles[viewName].icon;
+                document.getElementById('currentViewBadgeText').textContent = viewTitles[viewName].title;
+            }
+
+            // Aktualizace aktivního stylu v boční liště
+            document.querySelectorAll('.drawer-item').forEach(item => {
+                if (item.getAttribute('data-drawer-view') === viewName) {
+                    item.classList.add('active');
+                } else {
+                    item.classList.remove('active');
+                }
+            });
+
+            // Uložení stavu
+            try {
+                localStorage.setItem('shift_swap_view', viewName);
+            } catch (e) {}
+
+            const hashMapping = {
+                'shifts': '#moje-smeny',
+                'market': '#burza',
+                'calendar': '#kalendar',
+                'all': '#vse'
+            };
+            if (history.replaceState) {
+                history.replaceState(null, '', hashMapping[viewName] || '#vse');
+            }
+
+            // Přepočet velikosti FullCalendaru při zobrazení
+            if (viewName === 'calendar' || viewName === 'all') {
+                requestAnimationFrame(() => {
+                    if (calendarInstance) {
+                        calendarInstance.updateSize();
+                    }
+                });
+            }
+        }
+
+        // Inicializace po načtení
+        document.addEventListener('DOMContentLoaded', function() {
+            var calendarEl = document.getElementById('calendar');
+            if (calendarEl) {
+                var rawDataElement = document.getElementById('calendar-data');
+                var calendarEvents = rawDataElement ? JSON.parse(rawDataElement.textContent) : [];
+
+                calendarInstance = new FullCalendar.Calendar(calendarEl, {
+                    initialView: 'dayGridMonth',
+                    locale: 'cs',
+                    firstDay: 1,
+                    headerToolbar: {
+                        left: 'prev,next today',
+                        center: 'title',
+                        right: 'dayGridMonth,timeGridWeek'
+                    },
+                    buttonText: {
+                        today: 'Dnes',
+                        month: 'Měsíc',
+                        week: 'Týden'
+                    },
+                    events: calendarEvents,
+                    eventTimeFormat: {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: false
+                    }
+                });
+                calendarInstance.render();
+            }
+
+            // Detekce počátečního pohledu
+            const hash = window.location.hash;
+            let initialView = 'all';
+
+            if (hash === '#moje-smeny') initialView = 'shifts';
+            else if (hash === '#burza' || hash === '#vymena') initialView = 'market';
+            else if (hash === '#kalendar') initialView = 'calendar';
+            else if (hash === '#vse') initialView = 'all';
+            else {
+                const savedView = localStorage.getItem('shift_swap_view');
+                if (savedView && ['shifts', 'market', 'calendar', 'all'].includes(savedView)) {
+                    initialView = savedView;
+                }
+            }
+
+            switchView(initialView);
+        });
+    </script>
+
+</body>
+</html>
